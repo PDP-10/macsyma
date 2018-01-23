@@ -1,0 +1,415 @@
+;; -*- Mode: Lisp; Package: User -*-
+
+;; HOWTO: Make a macsyma for your very own.
+;; In general, see the lispm documentation AI:LMMAN;MAKSYS
+;; (MAKE-SYSTEM 'MACSYMA) to load.
+;; (MAKE-SYSTEM 'MACSYMA ':COMPILE) to compile.
+;; (MAKE-SYSTEM 'MACSYMA ':COMPILE ':BATCH) to compile, load, and don't
+;;   ask questions.
+;; do (NEW-MACSYMA) before this to set up the patch-file info for
+;; newly compiled systems.
+;; (LOAD-PATCHES) to load lispm patches before making the system.
+;; (PRINT-DISK-LABEL) to check for free bands to DISK-SAVE to.
+;; (DISK-SAVE <BAND-NUMBER>)
+;; (DISK-RESTORE <BAND-NUMBER>)
+;; CURRENT-BAND is what cold-booting gets.
+;; (PRINT-LOADED-BAND)
+
+;; 1) Cold Boot the machine.
+;; 2) (LOGIN 'LMMAX T)
+;; 3) (LOAD-PATCHES ':SILENT)
+;; 4) (LOAD "MC:LMMAX;SYSDEF")
+;; 5) (MAKE-SYSTEM 'MACSYMA ':noshit)
+
+;; Definition of the Macsyma System -- if you modify this file, please
+;; send mail to BUG-LMMAX.  See the file MC:LMMAX;=READ= =ALSO= for an
+;; explanation of the organization of the directories used
+;; by Lisp Machine Macsyma.
+
+(DEFCONST *MACSYMA-PHYSICAL-HOST* "POINTER")
+
+(DEFCONST *MACSYMA-MIT-LOGICAL-TRANSLATIONS*
+	  '(("CFFK" "CFFK;")
+	    ("CWH2" "CWH2;")
+	    ("DAS" "DAS;")
+	    ("ELLEN" "ELLEN;")
+	    ("EMAXIM" "EMAXIM;")
+	    ("JIM" "JIM;")
+	    ("JM" "JM;")
+	    ("JPG" "JPG;")
+	    ("LIBMAX" "LIBMAX;")
+	    ("LMMAX" "LMMAX;")
+	    ("LMMAXQ" "LMMAXQ;")
+	    ("LMMAXR" "LMMAXR;")
+	    ("MACRAK" "MACRAK;")
+	    ("MAXDOC" "MAXDOC;")
+	    ("MAXII" "MAXII;")
+	    ("MAXSRC" "MAXSRC;")
+	    ("MRG" "MRG;")
+	    ("PAULW" "PAULW;")
+	    ("RAT" "RAT;")
+	    ("REH" "REH;")
+	    ("RZ" "RZ;")
+	    ("TRANSL" "TRANSL;")
+	    ("WGD" "WGD;")))
+
+(DEFCONST *MACSYMA-SCRC-LOGICAL-TRANSLATIONS*
+	  '(
+	    ("CFFK" ">MACSYMA>CFFK>")
+	    ("CWH2" ">MACSYMA>CWH2>")
+	    ("DAS" ">MACSYMA>DAS>")
+	    ("ELLEN" ">MACSYMA>ELLEN>")
+	    ("EMAXIM" ">MACSYMA>EMAXIM>")
+	    ("JIM" ">MACSYMA>JIM>")
+	    ("JM" ">MACSYMA>JM>")
+	    ("JPG" ">MACSYMA>JPG>")
+	    ("LIBMAX" ">MACSYMA>LIBMAX>")
+	    ("LMMAX" ">MACSYMA>LMMAX>")
+	    ("LMMAXQ" ">MACSYMA>LMMAXQ>")
+	    ("LMMAXR" ">MACSYMA>LMMAXR>")
+	    ("MACRAK" ">MACSYMA>MACRAK>")
+	    ("MAXDOC" ">MACSYMA>MAXDOC>")
+	    ("MAXII" ">MACSYMA>MAXII>")
+	    ("MAXSRC" ">MACSYMA>MAXSRC>")
+	    ("MRG" ">MACSYMA>MRG>")
+	    ("PAULW" ">MACSYMA>PAULW>")
+	    ("RAT" ">MACSYMA>RAT>")
+	    ("REH" ">MACSYMA>REH>")
+	    ("RZ" ">MACSYMA>RZ>")
+	    ("TRANSL" ">MACSYMA>TRANSL>")
+	    ("WGD" ">MACSYMA>WGD>")))
+
+(DEFCONST *MACSYMA-LOGICAL-TRANSLATIONS* *MACSYMA-SCRC-LOGICAL-TRANSLATIONS*)
+
+(FS:ADD-LOGICAL-PATHNAME-HOST "MACSYMA"
+			      *MACSYMA-PHYSICAL-HOST* *MACSYMA-LOGICAL-TRANSLATIONS* )
+
+
+;; First, define the Macsyma name space (currently called a package).
+
+(PACKAGE-DECLARE MACSYMA GLOBAL 10000. NIL	;no files
+   ;; Standard symbols that Macsyma tries to clobber.
+   ;; [Can't these be fixed? --- JLK]
+   ;; [Who knows. Moon or BEE or somebody put this magic here a long
+   ;;  time ago, without comment about exactly what was going wrong
+   ;;  or where.]
+   (SHADOW TRUE REM DISPATCH ARGS
+	   DEF LISTEN FETCH PAIR XOR 
+	   SELECTOR			;Used by MRGMAC
+	   )
+
+   ;; These functions are defined in LMMAX;LMSUP, COMPLR, or METER.
+   (EXTERNAL MACSYMA MACSYMA-SPLIT-SCREEN
+	     ;;This has to be EQ for TYPEP and is redefined in MRG;DB
+	     SYMBOL)
+   (MYREFNAME GLOBAL MC))
+
+(GLOBALIZE 'MACSYMA)
+
+;; Define the structure of the files constitutiing the Macsyma System.
+;; Is there anything that can reasonably standalone at this point, and
+;; thus should be made a subsystem of its own?
+
+(DEFSYSTEM MACSYMA
+  (:NAME "Macsyma")
+  (:PATHNAME-DEFAULT "MACSYMA: LMMAX;")
+  (:PACKAGE MACSYMA)
+  (:PATCHABLE)
+  (:MODULE DESTRUCTURING-LET
+	   (("LMMAX;LET"))
+	   :PACKAGE System-Internals)
+;Loaded in MIT's latest system
+;#+MIT
+;  (:MODULE FANCY-RUBOUT
+;	   (("CWH;RH"))
+;	   :PACKAGE TV)
+#+MIT
+  (:MODULE SCREEN-SAVER
+	   (("CWH2;SAVER"))
+	   :PACKAGE TV)
+  (:MODULE PREREQUISITES
+	   (("MORMAC" "LMMAXQ;")
+	    ("COMPAT" "LMMAXQ;")))
+  (:MODULE DECLARATIONS
+	   (("MAXDOC;LMDCLS")))
+  (:MODULE FUNDAMENTAL-MACROS
+	   (("LIBMAX;DEFOPT" "LMMAXQ;")
+	    ("LIBMAX;DEFCAL" "LMMAXQ;")))
+  (:MODULE UTILITY-MACROS
+	   (("LIBMAX;MAXMAC" "LMMAXQ;")
+	    ("LIBMAX;MOPERS" "LMMAXQ;")
+	    ("LIBMAX;MFORMA" "LMMAXQ;")
+	    ("LIBMAX;DEFCAL" "LMMAXQ;")
+	    ))
+  (:MODULE OTHER-MACROS
+	   (("LIBMAX;MRGMAC" "LMMAXQ;")
+	    ("LIBMAX;PROCS" "LMMAXQ;")
+	    ("RZ;MACROS"     "LMMAXQ;")
+	    ("LIBMAX;STRMAC" "LMMAXQ;")
+	    ("LIBMAX;DISPLM" "LMMAXQ;")))
+  (:MODULE NUMERICAL-MACROS
+	   (("LIBMAX;NUMERM" "LMMAXQ;")))
+  (:MODULE RAT-MACROS
+	   (("RAT;RATMAC" "LMMAXQ;")
+	    ("RAT;MHAYAT" "LMMAXQ;")))
+  (:MODULE MACROS (OTHER-MACROS RAT-MACROS NUMERICAL-MACROS))
+  (:MODULE UTILITIES
+	   (("MAXSRC; OPERS" "LMMAXQ;")
+	    ("MAXSRC; UTILS" "LMMAXQ;")
+	    ("MAXSRC; SUMCON" "LMMAXQ;")
+	    ("MAXSRC; SUBLIS" "LMMAXQ;")
+	    ("MAXSRC; RUNTIM" "LMMAXQ;")
+	    ("MAXSRC; MERROR" "LMMAXQ;")
+	    ("MAXSRC; MFORMT" "LMMAXQ;")
+	    ("MAXSRC; MUTILS" "LMMAXQ;")
+	    ("MAXSRC; OUTMIS" "LMMAXQ;")
+	    ("LMMAX;MISC" "LMMAXQ;")))
+  (:MODULE DISPLAY
+	   (("MRG; DISPLA" "LMMAXQ;")
+	    ("MRG; NFORMA" "LMMAXQ;")
+	    ("MAXSRC; LDISP" "LMMAXQ;")
+	    ("MRG; GRIND" "LMMAXQ;")))
+  (:MODULE READER
+	   (("MAXII;NPARSE" "LMMAXQ;")))
+  (:MODULE I-O
+	   (("LMMAX;LMSUP""LMMAXQ;")
+	    ("MAXII;SYSTEM" "LMMAXQ;")
+	    ("MAXSRC;MLOAD" "LMMAXQ;")
+	    ("JPG;SUPRV" "LMMAXQ;")
+	    ;; we should really look, *seriously*, at the functionality provided
+	    ;; by the DSKFN package. Mainly, it saves and manages environments.
+	    ("JPG;DSKFN" "LMMAXQ;")
+	    ))
+  (:MODULE EVALUATOR
+	  (("JPG; MLISP" "LMMAXQ;")
+	   ("REH; MMACRO" "LMMAXQ;")
+	   ("REH; BUILDQ" "LMMAXQ;")))
+  (:MODULE COMMANDS
+	   (("JPG; COMM" "LMMAXQ;")
+	    ("JPG; COMM2" "LMMAXQ;")))
+  (:MODULE SIMPLIFICATION
+	   (("JM; SIMP" "LMMAXQ;")
+	    ("RAT; FLOAT" "LMMAXQ;")
+	    ("PAULW; CSIMP" "LMMAXQ;")
+	    ("PAULW; CSIMP2" "LMMAXQ;")
+	    ("JM; ZERO" "LMMAXQ;")
+	    ("MACRAK; LOGARC" "LMMAXQ;")
+	    ("MACRAK; RPART" "LMMAXQ;")))
+  (:MODULE RATIONAL-FUNCTIONS
+	   (("RAT; RAT3A" "LMMAXQ;")
+	    ("RAT; RAT3B" "LMMAXQ;")
+	    ("RAT; RAT3D" "LMMAXQ;")
+	    ("RAT; RAT3C" "LMMAXQ;")
+	    ("RAT; RAT3E" "LMMAXQ;")
+	    ("RAT; NRAT4" "LMMAXQ;")
+	    ("RAT; RATOUT" "LMMAXQ;")))
+  (:MODULE FACTORING
+	   (("RAT; LESFAC" "LMMAXQ;")
+	    ("RAT; FACTOR" "LMMAXQ;")
+	    ("PAULW; ALGFAC" "LMMAXQ;")
+	    ("RAT; NALGFA" "LMMAXQ;")
+;	    ("PAULW; NEWFAC" "LMMAXQ;")
+	    ("RAT; UFACT" "LMMAXQ;")
+	    ("RAT; RESULT" "LMMAXQ;")))
+  (:MODULE GCD
+	   (("RAT; SPGCD" "LMMAXQ;")
+;	    ("RAT; EZGCD" "LMMAXQ;")		;Neither of these GCD algorithms are 
+;	    ("PAULW; EEZ" "LMMAXQ;")		;supported anymore -- RZ
+	    ))
+  (:MODULE RATIONAL-FUNCTION-SUBSYSTEM
+	   (RATIONAL-FUNCTIONS FACTORING GCD))
+  (:MODULE ALGEBRAIC-DATABASE
+	   (("MAXSRC; INMIS" "LMMAXQ;")
+	    ("MRG;DB" "LMMAXQ;")
+	    ("MRG;COMPAR" "LMMAXQ;")
+	    ("JIM;ASKP" "LMMAXQ;")))		;does this belong here?
+  (:MODULE INTEGRATION
+	   (("JM;SININT" "LMMAXQ;")
+	    ("JM;SIN" "LMMAXQ;")
+	    ("JM;RISCH" "LMMAXQ;")))
+  (:MODULE DEFINITE-INTEGRATION
+	   (("PAULW; DEFINT" "LMMAXQ;")
+	    ("PAULW; RESIDU" "LMMAXQ;")))
+  (:MODULE DISPLAY-EDITOR-MACROS
+	   (("EMAXIM;EDMAC" "LMMAXQ;")))
+  (:MODULE DISPLAY-EDITOR
+	   (("EMAXIM;EDLM" "LMMAXQ;")
+	    ("EMAXIM;EDCTL" "LMMAXQ;")
+	    ("EMAXIM;EDEXP" "LMMAXQ;")
+	    ("EMAXIM;EDBUF" "LMMAXQ;")))
+  (:MODULE PLOTTING
+	   (("LMMAX;PLTWIN" "LMMAXQ;")
+	    ("LMMAX;PLOTLL" "LMMAXQ;")
+	    ("LMMAX;PLOT" "LMMAXQ;")
+	    ("LMMAX;IFFUN" "LMMAXQ;")
+	    ("LMMAX;PLOT3D" "LMMAXQ;")))
+  (:MODULE NUMERICAL-FUNCTIONS
+	   (("LMMAX;BESSEL" "LMMAXQ;")
+	    ("LMMAX;ELLIPT" "LMMAXQ;")
+	    ("MAXSRC;NUMER" "LMMAXQ;")
+	    ("MAXSRC;INTPOL" "LMMAXR;")
+	    ("MAXSRC;ROMBRG" "LMMAXR;")
+	    ))
+  (:MODULE TRIGONOMETRY
+	   (("MRG; TRIGI" "LMMAXQ;")
+	    ("MRG; TRIGO" "LMMAXQ;")
+	    ("RZ; TRGRED" "LMMAXQ;")))
+  (:MODULE MATRIX-ALGEBRA
+	   (("PAULW; MAT" "LMMAXQ;")
+	    ("PAULW; MATRIX" "LMMAXQ;")))
+  (:MODULE DETERMINANTS
+	   (("PAULW; SPRDET" "LMMAXQ;")
+	    ("PAULW; NEWINV" "LMMAXQ;")
+	    ("PAULW; LINNEW" "LMMAXQ;")
+	    ("RAT; NEWDET" "LMMAXQ;")))
+  (:MODULE PATTERN-MATCHING
+	   (("RAT; MATCOM" "LMMAXQ;")
+	    ("RAT; MATRUN" "LMMAXQ;")
+	    ("RAT; NISIMP" "LMMAXQ;")))
+  (:MODULE POISSON-SERIES
+	   (("RAT; POIS2" "LMMAXQ;")
+	    ("RAT; POIS3" "LMMAXQ;")
+	    ("RAT; RATPOI" "LMMAXQ;")))
+  (:MODULE LIMITS
+	   (("JIM; TLIMIT" "LMMAXQ;")
+	    ("JIM; LIMIT" "LMMAXQ;")))
+  (:MODULE SOLVE
+	   (("RAT; SOLVE" "LMMAXQ;")
+	    ("RAT; PSOLVE" "LMMAXQ;")
+	    ("RAT; ALGSYS" "LMMAXQ;")
+	    ("RAT; POLYRZ" "LMMAXQ;")
+	    ("CFFK; CPOLY" "LMMAXQ;")))
+  (:MODULE MACSYMA-LANGUAGE-COMPILER-MACROS
+	   (("LIBMAX;TRANSM" "LMMAXR;")))
+  (:MODULE MACSYMA-LANGUAGE-COMPILER
+	   ;; This includes the translator itself and runtime
+	   ;; support needed for translated code.
+	   (("TRANSL;TRANSL" "LMMAXR;")
+	    ("TRANSL;TRANSS" "LMMAXR;")
+	    ("TRANSL;TRANS1" "LMMAXR;")
+	    ("TRANSL;TRANS2" "LMMAXR;")
+	    ("TRANSL;TRANS3" "LMMAXR;")
+	    ("TRANSL;TRANS4" "LMMAXR;")
+	    ("TRANSL;TRANS5" "LMMAXR;")
+	    ("TRANSL;TRANSF" "LMMAXR;")
+	    ("TRANSL;TROPER" "LMMAXR;")
+	    ("TRANSL;TRUTIL" "LMMAXR;")
+	    ("TRANSL;TRMODE" "LMMAXR;")
+	    ("TRANSL;TRDATA" "LMMAXR;")
+	    ("TRANSL;TRPRED" "LMMAXR;")
+	    ("LIBMAX;TRANSQ" "LMMAXR;")
+	    ("TRANSL;ACALL" "LMMAXR;")
+	    ("TRANSL;FCALL" "LMMAXR;")
+	    ("TRANSL;EVALW" "LMMAXR;")
+	    ("TRANSL;TRPROP" "LMMAXR;")
+	    ("LIBMAX;MDEFUN" "LMMAXR;")
+	   ))
+
+  (:MODULE DOCUMENTATION
+	   (("ELLEN;OPTION" "LMMAXQ;")
+	    ;; Due to the highly hackish readtable munging,
+	    ;; and file accessing done in the PRIMER it has not
+	    ;; been converted.
+	    ;;("ELLEN; PRIMER" "LMMAXR;")
+	    ("LMMAX;MUDOC"  "LMMAXR;")))
+
+  (:MODULE MISCELLANEOUS
+	   ;; these should be further sorted someday.
+	   ;; no kidding.
+	   (("MRG; SCS" "LMMAXQ;")
+	    ("RZ; ASUM" "LMMAXQ;")
+	    ("MRG; FORTRA" "LMMAXQ;")
+	    ("MRG; OPTIM" "LMMAXQ;")
+	    ("LMMAX;ARRAY" "LMMAXQ;")
+	    ("MAXSRC; MDOT" "LMMAXQ;")
+	    ("MAXSRC; IRINTE" "LMMAXQ;")
+	    ("RZ; SERIES" "LMMAXQ;")
+	    ("RAT; HAYAT" "LMMAXQ;")
+	    ("RZ; SCHATC" "LMMAXQ;")
+	    ("RZ; NUMTH" "LMMAXQ;")
+	    ("MAXSRC; LAPLAC" "LMMAXQ;")
+	    ("RAT; PADE" "LMMAXQ;")
+	    ("RAT; HOMOG" "LMMAXQ;")
+	    ("RZ; COMBIN" "LMMAXQ;")
+	    ("DAS; MSTUFF" "LMMAXQ;")
+	    ("WGD; SPECFN" "LMMAXQ;")))
+
+  (:MODULE REST-OF-SYSTEM (
+			   READER DISPLAY GCD
+			   DOCUMENTATION
+			   ALGEBRAIC-DATABASE
+			   INTEGRATION
+			   DEFINITE-INTEGRATION
+			   PLOTTING NUMERICAL-FUNCTIONS
+			   TRIGONOMETRY
+			   MATRIX-ALGEBRA DETERMINANTS
+			   PATTERN-MATCHING
+			   LIMITS SOLVE
+			   MISCELLANEOUS
+			   ;; POISSON-SERIES (Bad news on LISPM)
+			   ))
+
+  ;; Transformations:
+  ;; Be carefull.
+  (:FASLOAD DESTRUCTURING-LET)
+  ;;  (:FASLOAD FANCY-RUBOUT) ;; this can be done anytime and is optional.
+#+MIT (:FASLOAD SCREEN-SAVER) ;; so can this
+  (:COMPILE-LOAD PREREQUISITES
+		 (:fasload DESTRUCTURING-LET)
+		 (:fasload DESTRUCTURING-LET))
+  (:COMPILE-LOAD DECLARATIONS
+		 (:FASLOAD PREREQUISITES)
+		 (:FASLOAD PREREQUISITES))
+  (:COMPILE-LOAD FUNDAMENTAL-MACROS
+		 (:FASLOAD DECLARATIONS)
+		 (:FASLOAD DECLARATIONS))
+  (:COMPILE-LOAD UTILITY-MACROS
+		 (:FASLOAD FUNDAMENTAL-MACROS)
+		 (:FASLOAD FUNDAMENTAL-MACROS))
+  (:COMPILE-LOAD MACROS
+		 (:FASLOAD UTILITY-MACROS)
+		 (:FASLOAD UTILITY-MACROS))
+  (:COMPILE-LOAD UTILITIES
+		 (:FASLOAD MACROS)
+		 (:FASLOAD MACROS))
+  (:COMPILE-LOAD COMMANDS
+		 (:FASLOAD MACROS)
+		 (:FASLOAD UTILITIES))
+  (:COMPILE-LOAD EVALUATOR
+		 (:FASLOAD MACROS)
+		 (:FASLOAD UTILITIES))
+  (:COMPILE-LOAD SIMPLIFICATION
+		 (:FASLOAD MACROS)
+		 (:FASLOAD EVALUATOR))
+  (:COMPILE-LOAD I-O
+		 (:FASLOAD MACROS)
+		 (:FASLOAD COMMANDS))
+  (:COMPILE-LOAD FACTORING
+		 (:FASLOAD MACROS)
+		 (:FASLOAD UTILITIES))
+  (:COMPILE-LOAD RATIONAL-FUNCTIONS
+		 (:FASLOAD MACROS)
+		 (:FASLOAD FACTORING))
+  (:COMPILE-LOAD DISPLAY-EDITOR-MACROS
+		 (:FASLOAD MACROS)
+		 (:FASLOAD MACROS))
+  (:COMPILE-LOAD DISPLAY-EDITOR
+		 (:FASLOAD DISPLAY-EDITOR-MACROS)
+		 (:FASLOAD DISPLAY-EDITOR-MACROS))
+  (:COMPILE-LOAD MACSYMA-LANGUAGE-COMPILER-MACROS
+		 (:FASLOAD MACROS)
+		 (:FASLOAD MACROS))
+  (:COMPILE-LOAD MACSYMA-LANGUAGE-COMPILER
+		 (:FASLOAD MACSYMA-LANGUAGE-COMPILER-MACROS)
+		 (:FASLOAD UTILITIES))
+  (:COMPILE-LOAD REST-OF-SYSTEM
+		 (:FASLOAD MACROS)
+		 (:FASLOAD SIMPLIFICATION I-O RATIONAL-FUNCTIONS))
+  )
+
+
+(defun (:noshit si:MAKE-SYSTEM-KEYWORD) ()
+  (SETQ INHIBIT-FDEFINE-WARNINGS ':JUST-WARN
+	TV:MORE-PROCESSING-GLOBAL-ENABLE NIL
+	si:*QUERY-TYPE* ':NOCONFIRM)
+  ())
